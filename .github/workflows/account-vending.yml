@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
 
     environment:
-      name: aws-account-vending
+      name: main
 
     steps:
       - name: Checkout repository
