@@ -1,9 +1,9 @@
 name: AWS Account Vending
 
-on:
-  issues:
-    types:
-      - labeled
+# on:
+#   issues:
+#     types:
+#       - labeled
 
 permissions:
   id-token: write
