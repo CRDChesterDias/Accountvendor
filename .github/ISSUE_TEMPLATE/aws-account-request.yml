@@ -1,9 +1,7 @@
 name: AWS Account Vending Request
-description: Request one or more AWS accounts through the account vending process
-title: "[AWS Account Request]: <app-name>"
+description: Request a new AWS account
+title: "[AWS Account Request]: <account-name>"
 labels: ["account-request", "pending-review"]
-assignees:
-  - cloud-platform-team
 
 body:
   - type: markdown
@@ -11,117 +9,52 @@ body:
       value: |
         # AWS Account Vending Request
 
-        Use this form to request new AWS commercial accounts.
+        Submit this request to create a new AWS account.
 
-        **Approval is required before provisioning begins.**
+        After submission, the Cloud Platform team will review and approve the request.
 
-        ---
-
-  - type: dropdown
-    id: request_type
+  - type: input
+    id: account_name
     attributes:
-      label: Request Type
-      description: Select whether this is for one account or multiple accounts.
-      options:
-        - Single Account
-        - Multiple Accounts
+      label: Account Name
+      description: Name of the AWS account.
+      placeholder: app-dev-001
     validations:
       required: true
 
-  - type: dropdown
-    id: business_unit
+  - type: input
+    id: account_email
     attributes:
-      label: Business Unit
-      description: Select the business unit requesting the account.
-      options:
-        - Cloud Platform
-        - Application Team
-        - Security
-        - Data
-        - Infrastructure
-        - Other
+      label: Account Email
+      description: Unique email address for the AWS account.
+      placeholder: app-dev-001@example.com
     validations:
       required: true
 
-  - type: textarea
-    id: accounts
+  - type: input
+    id: target_ou_id
     attributes:
-      label: Account Details
-      description: |
-        Enter one account per line using CSV format.
-
-        Format:
-        account_name,account_email,environment,target_ou_id,owner,cost_center
-
-        Example:
-        app-dev-001,app-dev-001@example.com,dev,ou-xxxx-yyyyyyyy,owner@example.com,CC1234
-      value: |
-        account_name,account_email,environment,target_ou_id,owner,cost_center
-        app-dev-001,app-dev-001@example.com,dev,ou-xxxx-yyyyyyyy,owner@example.com,CC1234
-    validations:
-      required: true
-
-  - type: dropdown
-    id: criticality
-    attributes:
-      label: Business Criticality
-      description: Select the criticality of workloads expected in these accounts.
-      options:
-        - Low
-        - Medium
-        - High
-        - Mission Critical
-    validations:
-      required: true
-
-  - type: checkboxes
-    id: baseline_controls
-    attributes:
-      label: Required Baseline Controls
-      description: Confirm required controls for account provisioning.
-      options:
-        - label: CloudTrail must be enabled
-          required: true
-        - label: AWS Config must be enabled
-          required: true
-        - label: GuardDuty must be enabled
-          required: true
-        - label: Budget alert must be configured
-          required: true
-        - label: IAM Identity Center access must be assigned
-          required: true
-
-  - type: textarea
-    id: access_requirements
-    attributes:
-      label: Access Requirements
-      description: Mention required permission sets, admin groups, read-only groups, or application team access.
-      placeholder: |
-        Admin Group: AWS-App-Dev-Admins
-        ReadOnly Group: AWS-App-Dev-ReadOnly
-        Terraform Role Required: Yes
+      label: Target OU ID
+      description: AWS Organizations OU ID where this account should be moved.
+      placeholder: ou-xxxx-yyyyyyyy
     validations:
       required: true
 
   - type: textarea
-    id: justification
+    id: business_justification
     attributes:
       label: Business Justification
-      description: Explain why these account(s) are required.
-      placeholder: |
-        Example:
-        These accounts are required for a new application landing zone supporting dev and test environments.
+      description: Why is this AWS account required?
+      placeholder: This account is needed for the new application development environment.
     validations:
       required: true
 
   - type: checkboxes
-    id: requester_acknowledgement
+    id: acknowledgement
     attributes:
       label: Requester Acknowledgement
       options:
-        - label: I confirm the account details are accurate.
+        - label: I confirm the account name, email, and OU are correct.
           required: true
-        - label: I understand this request requires Cloud Platform approval.
-          required: true
-        - label: I understand account usage may be monitored for security and cost governance.
+        - label: I understand this request requires approval before provisioning.
           required: true
