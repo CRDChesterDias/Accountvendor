@@ -5,6 +5,11 @@ name: AWS Account Vending
 #     types:
 #       - labeled
 
+
+on:
+  push:
+    branches:
+      - main
 permissions:
   id-token: write
   contents: read
