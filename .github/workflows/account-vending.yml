@@ -1,15 +1,10 @@
-name: AWS Account Vending
-
-# on:
-#   issues:
-#     types:
-#       - labeled
-
+name: AWS Account Vending from Issue
 
 on:
-  push:
-    branches:
-      - main
+  issues:
+    types:
+      - opened
+
 permissions:
   id-token: write
   contents: read
@@ -17,157 +12,130 @@ permissions:
 
 jobs:
   provision-account:
-    #if: github.event.label.name == 'approved-account-vending'
     runs-on: ubuntu-latest
 
-    environment:
-      name: main
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials for management account
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ORG_MANAGEMENT_ROLE_ARN }}
           aws-region: us-east-1
 
-      # - name: Parse issue input
-      #   id: parse
-      #   uses: actions/github-script@v7
-      #   with:
-      #     script: |
-      #       const body = context.payload.issue.body;
+      - name: Parse issue input
+        id: parse
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.issue.body;
 
-      #       function extract(label) {
-      #         const regex = new RegExp(`### ${label}\\s+([\\s\\S]*?)(?=###|$)`);
-      #         const match = body.match(regex);
-      #         return match ? match[1].trim() : "";
-      #       }
+            function extract(label) {
+              const regex = new RegExp(`### ${label}\\s+([\\s\\S]*?)(?=###|$)`);
+              const match = body.match(regex);
+              return match ? match[1].trim() : "";
+            }
 
-      #       core.setOutput("account_name", extract("Account Name"));
-      #       core.setOutput("account_email", extract("Account Email"));
-      #       core.setOutput("target_ou_id", extract("Target OU ID"));
+            core.setOutput("account_name", extract("Account Name"));
+            core.setOutput("account_email", extract("Account Email"));
+            core.setOutput("target_ou_id", extract("Target OU ID"));
 
-      # - name: Validate issue input
-      #   run: |
-      #     ACCOUNT_NAME="${{ steps.parse.outputs.account_name }}"
-      #     ACCOUNT_EMAIL="${{ steps.parse.outputs.account_email }}"
-      #     TARGET_OU_ID="${{ steps.parse.outputs.target_ou_id }}"
+      - name: Create AWS account
+        run: |
+          set -euo pipefail
 
-      #     if [[ -z "$ACCOUNT_NAME" || -z "$ACCOUNT_EMAIL" || -z "$TARGET_OU_ID" ]]; then
-      #       echo "Missing required issue input."
-      #       exit 1
-      #     fi
+          ACCOUNT_NAME="${{ steps.parse.outputs.account_name }}"
+          ACCOUNT_EMAIL="${{ steps.parse.outputs.account_email }}"
+          TARGET_OU_ID="${{ steps.parse.outputs.target_ou_id }}"
 
-      #     if [[ ! "$TARGET_OU_ID" =~ ^ou-[a-z0-9]{4,32}-[a-z0-9]{8,32}$ ]]; then
-      #       echo "Invalid OU ID format: $TARGET_OU_ID"
-      #       exit 1
-      #     fi
+          echo "ACCOUNT_NAME=$ACCOUNT_NAME" >> $GITHUB_ENV
+          echo "ACCOUNT_EMAIL=$ACCOUNT_EMAIL" >> $GITHUB_ENV
+          echo "TARGET_OU_ID=$TARGET_OU_ID" >> $GITHUB_ENV
 
-      #     echo "ACCOUNT_NAME=$ACCOUNT_NAME" >> $GITHUB_ENV
-      #     echo "ACCOUNT_EMAIL=$ACCOUNT_EMAIL" >> $GITHUB_ENV
-      #     echo "TARGET_OU_ID=$TARGET_OU_ID" >> $GITHUB_ENV
+          if [[ -z "$ACCOUNT_NAME" || -z "$ACCOUNT_EMAIL" || -z "$TARGET_OU_ID" ]]; then
+            echo "Missing required input from issue."
+            exit 1
+          fi
 
-      # - name: Create AWS account
-      #   run: |
-      #     REQUEST_ID=$(aws organizations create-account \
-      #       --email "$ACCOUNT_EMAIL" \
-      #       --account-name "$ACCOUNT_NAME" \
-      #       --role-name OrganizationAccountAccessRole \
-      #       --query 'CreateAccountStatus.Id' \
-      #       --output text)
+          REQUEST_ID=$(aws organizations create-account \
+            --email "$ACCOUNT_EMAIL" \
+            --account-name "$ACCOUNT_NAME" \
+            --role-name OrganizationAccountAccessRole \
+            --query 'CreateAccountStatus.Id' \
+            --output text)
 
-      #     echo "REQUEST_ID=$REQUEST_ID" >> $GITHUB_ENV
-      #       - name: Wait for account creation
-      #   run: |
-      #     while true; do
-      #       STATUS=$(aws organizations describe-create-account-status \
-      #         --create-account-request-id "$REQUEST_ID" \
-      #         --query 'CreateAccountStatus.State' \
-      #         --output text)
+          echo "REQUEST_ID=$REQUEST_ID" >> $GITHUB_ENV
 
-      #       echo "Current status: $STATUS"
+      - name: Wait for account creation
+        run: |
+          set -euo pipefail
 
-      #       if [[ "$STATUS" == "SUCCEEDED" ]]; then
-      #         ACCOUNT_ID=$(aws organizations describe-create-account-status \
-      #           --create-account-request-id "$REQUEST_ID" \
-      #           --query 'CreateAccountStatus.AccountId' \
-      #           --output text)
+          while true; do
+            STATUS=$(aws organizations describe-create-account-status \
+              --create-account-request-id "$REQUEST_ID" \
+              --query 'CreateAccountStatus.State' \
+              --output text)
 
-      #         echo "ACCOUNT_ID=$ACCOUNT_ID" >> $GITHUB_ENV
-      #         break
-      #       fi
+            echo "Status: $STATUS"
 
-      #       if [[ "$STATUS" == "FAILED" ]]; then
-      #         REASON=$(aws organizations describe-create-account-status \
-      #           --create-account-request-id "$REQUEST_ID" \
-      #           --query 'CreateAccountStatus.FailureReason' \
-      #           --output text)
+            if [[ "$STATUS" == "SUCCEEDED" ]]; then
+              ACCOUNT_ID=$(aws organizations describe-create-account-status \
+                --create-account-request-id "$REQUEST_ID" \
+                --query 'CreateAccountStatus.AccountId' \
+                --output text)
 
-      #         echo "Account creation failed: $REASON"
-      #         exit 1
-      #       fi
+              echo "ACCOUNT_ID=$ACCOUNT_ID" >> $GITHUB_ENV
+              break
+            fi
 
-      #       sleep 30
-      #     done
+            if [[ "$STATUS" == "FAILED" ]]; then
+              REASON=$(aws organizations describe-create-account-status \
+                --create-account-request-id "$REQUEST_ID" \
+                --query 'CreateAccountStatus.FailureReason' \
+                --output text)
 
-      # - name: Get organization root ID
-      #   run: |
-      #     ROOT_ID=$(aws organizations list-roots \
-      #       --query 'Roots[0].Id' \
-      #       --output text)
+              echo "Account creation failed: $REASON"
+              exit 1
+            fi
 
-      #     echo "ROOT_ID=$ROOT_ID" >> $GITHUB_ENV
+            sleep 30
+          done
 
-      # - name: Move account to target OU
-      #   run: |
-      #     aws organizations move-account \
-      #       --account-id "$ACCOUNT_ID" \
-      #       --source-parent-id "$ROOT_ID" \
-      #       --destination-parent-id "$TARGET_OU_ID"
-      #       - name: Comment success on issue
-      #   uses: actions/github-script@v7
-      #   with:
-      #     script: |
-      #       await github.rest.issues.createComment({
-      #         owner: context.repo.owner,
-      #         repo: context.repo.repo,
-      #         issue_number: context.issue.number,
-      #         body: `✅ AWS account provisioned successfully.
+      - name: Move account to OU
+        run: |
+          set -euo pipefail
 
-      #       **Account Name:** ${process.env.ACCOUNT_NAME}
-      #       **Account Email:** ${process.env.ACCOUNT_EMAIL}
-      #       **Account ID:** ${process.env.ACCOUNT_ID}
-      #       **Target OU:** ${process.env.TARGET_OU_ID}`
-      #       });
+          ROOT_ID=$(aws organizations list-roots \
+            --query 'Roots[0].Id' \
+            --output text)
 
-      # - name: Update issue labels
-      #   uses: actions/github-script@v7
-      #   with:
-      #     script: |
-      #       await github.rest.issues.addLabels({
-      #         owner: context.repo.owner,
-      #         repo: context.repo.repo,
-      #         issue_number: context.issue.number,
-      #         labels: ['completed']
-      #       });
+          aws organizations move-account \
+            --account-id "$ACCOUNT_ID" \
+            --source-parent-id "$ROOT_ID" \
+            --destination-parent-id "$TARGET_OU_ID"
 
-      #       try {
-      #         await github.rest.issues.removeLabel({
-      #           owner: context.repo.owner,
-      #           repo: context.repo.repo,
-      #           issue_number: context.issue.number,
-      #           name: 'pending-review'
-      #         });
-      #       } catch (e) {}
+      - name: Comment account details and close issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = `✅ AWS account provisioned successfully.
 
-      #       try {
-      #         await github.rest.issues.removeLabel({
-      #           owner: context.repo.owner,
-      #           repo: context.repo.repo,
-      #           issue_number: context.issue.number,
-      #           name: 'approved-account-vending'
-      #         });
-      #       } catch (e) {}
+            **Account Name:** ${process.env.ACCOUNT_NAME}
+            **Account Email:** ${process.env.ACCOUNT_EMAIL}
+            **Account ID:** ${process.env.ACCOUNT_ID}
+            **Target OU:** ${process.env.TARGET_OU_ID}
+            **Access Role:** arn:aws:iam::${process.env.ACCOUNT_ID}:role/OrganizationAccountAccessRole
+
+            Issue closed automatically.`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });
+
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              state: "closed"
+            });
